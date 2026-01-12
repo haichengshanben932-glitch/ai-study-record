@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>Study Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500&display=swap" rel="stylesheet">
+  <style>
+    /* ------------------------------
+       ベースデザイン
+    ------------------------------ */
+    body {
+      font-family: 'Zen Kaku Gothic New', sans-serif;
+      background: linear-gradient(180deg, #C2EEFF 0%, #EAF9FF 100%);
+      margin: 0;
+      padding: 0;
+      color: #333;
+    }
+
+    main {
+      width: 90%;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 40px 0 80px;
+    }
+
+    /* ------------------------------
+       見出し
+    ------------------------------ */
+    h1 {
+      text-align: center;
+      margin-bottom: 36px;
+      font-size: 42px;
+      letter-spacing: 1px;
+      color: #2563eb;
+    }
+
+    h2 {
+      font-size: 20px;
+      margin: 40px 0 16px;
+      color: #1e3a8a;
+      text-align: center;
+      position: relative;
+    }
+    h2::after {
+      content: "";
+      display: block;
+      width: 60px;
+      height: 3px;
+      background: #60a5fa;
+      margin: 8px auto 0;
+      border-radius: 2px;
+    }
+
+    /* ------------------------------
+       ナビボタン
+    ------------------------------ */
+    .nav {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .btn {
+      display: inline-block;
+      background: #3b82f6;
+      color: white;
+      padding: 10px 18px;
+      margin: 0 8px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-size: 15px;
+      box-shadow: 0 4px 8px rgba(59,130,246,0.3);
+      transition: all 0.3s;
+    }
+    .btn:hover {
+      background: #2563eb;
+      transform: translateY(-3px);
+    }
+
+    /* ------------------------------
+       リセットボタン
+    ------------------------------ */
+    #resetBtn {
+      display: block;
+      margin: 0 auto 30px;
+      background: #f87171;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 14px;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+      transition: background 0.3s, transform 0.2s;
+    }
+    #resetBtn:hover {
+      background: #ef4444;
+      transform: translateY(-2px);
+    }
+
+    /* ------------------------------
+       カードグリッド
+    ------------------------------ */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+
+    /* ------------------------------
+       カードデザイン
+    ------------------------------ */
+    .card {
+      background: #ffffffcc;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+      text-align: center;
+      backdrop-filter: blur(6px);
+      transition: transform 0.3s;
+    }
+    .card:hover {
+      transform: translateY(-5px);
+    }
+
+    canvas {
+      max-width: 220px;
+      margin: auto;
+    }
+
+    h3 {
+      font-size: 17px;
+      margin-bottom: 12px;
+      color: #1e3a8a;
+    }
+
+    p {
+      margin: 6px 0;
+      font-size: 13px;
+      color: #555;
+    }
+
+    /* ------------------------------
+       フッター
+    ------------------------------ */
+    footer {
+      text-align: center;
+      font-size: 12px;
+      color: #555;
+      margin-top: 60px;
+      opacity: 0.7;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Study Tracker</h1>
+
+    <div class="nav">
+      <a href="record.html" class="btn">📘 勉強記録</a>
+      <a href="ranking.html" class="btn">🏆 ランキング</a>
+    </div>
+
+    <button id="resetBtn">🗑️ データをリセット</button>
+
+    <h2>教材ごとの進捗率</h2>
+    <div class="grid" id="progressGrid"></div>
+
+    <h2>学習時間（1週間）</h2>
+    <div class="card"><canvas id="timeChart"></canvas></div>
+
+    <h2>勉強効率（ページ/時間）</h2>
+    <div class="card"><canvas id="efficiencyChart"></canvas></div>
+
+    <footer>© 2025 Study Tracker</footer>
+  </main>
+
+  <script>
+    const records = JSON.parse(localStorage.getItem("records")) || [];
+
+    /* --- 教材ごとの進捗円グラフ --- */
+    const grid = document.getElementById("progressGrid");
+    records.forEach((r, i) => {
+      const progress = (r.pages / r.totalPages * 100).toFixed(1);
+      const remain = (100 - progress).toFixed(1);
+
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <h3>${r.material}</h3>
+        <canvas id="progressChart${i}"></canvas>
+        <p>${progress}% 完了</p>
+      `;
+      grid.appendChild(card);
+
+      new Chart(document.getElementById(`progressChart${i}`), {
+        type: "doughnut",
+        data: {
+          labels: ["学習済", "残り"],
+          datasets: [{
+            data: [progress, remain],
+            backgroundColor: ["#34d399","#d1d5db"]
+          }]
+        },
+        options: {
+          cutout: "70%",
+          plugins: { legend: { display: false } }
+        }
+      });
+    });
+
+    /* --- 日ごとの合計時間 --- */
+    const byDate = {};
+    records.forEach(r=>{
+      byDate[r.date] = (byDate[r.date]||0) + r.minutes;
+    });
+    const dates = Object.keys(byDate);
+    const times = Object.values(byDate);
+
+    new Chart(document.getElementById("timeChart"), {
+      type:"bar",
+      data:{
+        labels:dates,
+        datasets:[{
+          label:"学習時間(分)",
+          data:times,
+          backgroundColor:"#60a5fa",
+          borderRadius: 6
+        }]
+      },
+      options:{
+        plugins:{legend:{display:false}},
+        scales:{
+          y:{beginAtZero:true}
+        }
+      }
+    });
+
+    /* --- 勉強効率 (ページ/時間) --- */
+    const efficiency = records.map(r=>(r.pages/(r.minutes/60)).toFixed(1));
+    const days = records.map(r=>r.date);
+
+    new Chart(document.getElementById("efficiencyChart"), {
+      type:"line",
+      data:{
+        labels:days,
+        datasets:[{
+          label:"効率 (ページ/時間)",
+          data:efficiency,
+          borderColor:"#f97316",
+          fill:false,
+          tension:0.3
+        }]
+      },
+      options:{
+        plugins:{legend:{display:false}},
+        scales:{y:{beginAtZero:true}}
+      }
+    });
+
+    /* --- リセットボタン動作 --- */
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      const confirmDelete = confirm("本当にすべての記録を削除しますか？");
+      if (confirmDelete) {
+        localStorage.removeItem("records");
+        alert("データを削除しました！");
+        location.reload();
+      }
+    });
+  </script>
+</body>
+</html>
