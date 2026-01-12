@@ -1,273 +1,165 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <title>Study Tracker</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Study Tracker - 記録</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500&display=swap" rel="stylesheet">
   <style>
-    /* ------------------------------
-       ベースデザイン
-    ------------------------------ */
     body {
       font-family: 'Zen Kaku Gothic New', sans-serif;
       background: linear-gradient(180deg, #C2EEFF 0%, #EAF9FF 100%);
-      margin: 0;
-      padding: 0;
-      color: #333;
+      margin: 0; padding: 20px; color: #333; min-height: 100vh;
     }
-
-    main {
-      width: 90%;
-      max-width: 1000px;
-      margin: 0 auto;
-      padding: 40px 0 80px;
+    .container { max-width: 500px; margin: auto; background: #ffffffcc; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); backdrop-filter: blur(10px); }
+    h1 { text-align: center; color: #2563eb; font-size: 26px; margin-bottom: 25px; }
+    
+    /* AIスキャンエリア */
+    .camera-section {
+      border: 2px dashed #3b82f6; background: #eff6ff; padding: 15px;
+      text-align: center; border-radius: 15px; margin-bottom: 25px;
     }
-
-    /* ------------------------------
-       見出し
-    ------------------------------ */
-    h1 {
-      text-align: center;
-      margin-bottom: 36px;
-      font-size: 42px;
-      letter-spacing: 1px;
-      color: #2563eb;
+    #status { color: #2563eb; font-weight: bold; margin: 8px 0; font-size: 13px; }
+    #debugCanvas { border: 2px solid #60a5fa; max-width: 100%; border-radius: 10px; display: none; margin-top: 10px; }
+    
+    /* 入力フォーム */
+    .form-group { margin-bottom: 18px; }
+    label { display: block; margin-bottom: 6px; font-weight: bold; color: #1e3a8a; font-size: 14px; }
+    input, select { 
+      width: 100%; padding: 12px; border: 1px solid #bfdbfe; border-radius: 10px; 
+      box-sizing: border-box; font-size: 16px; background: white;
     }
-
-    h2 {
-      font-size: 20px;
-      margin: 40px 0 16px;
-      color: #1e3a8a;
-      text-align: center;
-      position: relative;
+    input:focus, select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 5px rgba(59,130,246,0.2); }
+    
+    .btn-save { 
+      width: 100%; padding: 15px; background: #3b82f6; color: white; border: none; 
+      border-radius: 10px; font-size: 18px; font-weight: bold; cursor: pointer; 
+      transition: 0.3s; margin-top: 10px; box-shadow: 0 4px 12px rgba(59,130,246,0.3); 
     }
-    h2::after {
-      content: "";
-      display: block;
-      width: 60px;
-      height: 3px;
-      background: #60a5fa;
-      margin: 8px auto 0;
-      border-radius: 2px;
-    }
-
-    /* ------------------------------
-       ナビボタン
-    ------------------------------ */
-    .nav {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-
-    .btn {
-      display: inline-block;
-      background: #3b82f6;
-      color: white;
-      padding: 10px 18px;
-      margin: 0 8px;
-      border-radius: 10px;
-      text-decoration: none;
-      font-size: 15px;
-      box-shadow: 0 4px 8px rgba(59,130,246,0.3);
-      transition: all 0.3s;
-    }
-    .btn:hover {
-      background: #2563eb;
-      transform: translateY(-3px);
-    }
-
-    /* ------------------------------
-       リセットボタン
-    ------------------------------ */
-    #resetBtn {
-      display: block;
-      margin: 0 auto 30px;
-      background: #f87171;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      padding: 8px 16px;
-      cursor: pointer;
-      font-size: 14px;
-      box-shadow: 0 3px 6px rgba(0,0,0,0.1);
-      transition: background 0.3s, transform 0.2s;
-    }
-    #resetBtn:hover {
-      background: #ef4444;
-      transform: translateY(-2px);
-    }
-
-    /* ------------------------------
-       カードグリッド
-    ------------------------------ */
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-      gap: 16px;
-      margin-top: 20px;
-    }
-
-    /* ------------------------------
-       カードデザイン
-    ------------------------------ */
-    .card {
-      background: #ffffffcc;
-      border-radius: 16px;
-      padding: 20px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.08);
-      text-align: center;
-      backdrop-filter: blur(6px);
-      transition: transform 0.3s;
-    }
-    .card:hover {
-      transform: translateY(-5px);
-    }
-
-    canvas {
-      max-width: 220px;
-      margin: auto;
-    }
-
-    h3 {
-      font-size: 17px;
-      margin-bottom: 12px;
-      color: #1e3a8a;
-    }
-
-    p {
-      margin: 6px 0;
-      font-size: 13px;
-      color: #555;
-    }
-
-    /* ------------------------------
-       フッター
-    ------------------------------ */
-    footer {
-      text-align: center;
-      font-size: 12px;
-      color: #555;
-      margin-top: 60px;
-      opacity: 0.7;
-    }
+    .btn-save:hover { background: #2563eb; transform: translateY(-2px); }
+    .btn-back { display: block; text-align: center; margin-top: 20px; color: #64748b; text-decoration: none; font-size: 14px; }
   </style>
 </head>
 <body>
-  <main>
-    <h1>Study Tracker</h1>
 
-    <div class="nav">
-      <a href="record.html" class="btn">📘 勉強記録</a>
-      <a href="ranking.html" class="btn">🏆 ランキング</a>
+<div class="container">
+  <h1>📘 勉強を記録する</h1>
+
+  <div class="camera-section">
+    <label>📷 ノートの番号を自動入力</label>
+    <input type="file" id="fileInput" accept="image/*" style="margin-top:10px;">
+    <div id="status">画像を選ぶと数字を読み取ります</div>
+    <canvas id="debugCanvas"></canvas>
+  </div>
+
+  <hr style="border: 0; border-top: 1px solid #bfdbfe; margin-bottom: 20px;">
+
+  <form id="studyForm">
+    <div class="form-group">
+      <label>📅 日付</label>
+      <input type="date" id="date" required>
     </div>
 
-    <button id="resetBtn">🗑️ データをリセット</button>
+    <div class="form-group">
+      <label>📚 教材を選択</label>
+      <select id="material" required>
+        <option value="">選択してください</option>
+        <option value="数学ワーク">数学ワーク</option>
+        <option value="英語テキスト">英語テキスト</option>
+        <option value="漢字練習">漢字練習</option>
+        <option value="理科プリント">理科プリント</option>
+        <option value="その他">その他（自由入力）</option>
+      </select>
+    </div>
 
-    <h2>教材ごとの進捗率</h2>
-    <div class="grid" id="progressGrid"></div>
+    <div class="form-group">
+      <label>🔢 問題番号 / ページ</label>
+      <input type="number" id="problemNumber" placeholder="AIスキャンまたは手入力" required>
+    </div>
 
-    <h2>学習時間（1週間）</h2>
-    <div class="card"><canvas id="timeChart"></canvas></div>
+    <div class="form-group">
+      <label>⏱️ 学習時間 (分)</label>
+      <input type="number" id="minutes" placeholder="例: 30" required>
+    </div>
 
-    <h2>勉強効率（ページ/時間）</h2>
-    <div class="card"><canvas id="efficiencyChart"></canvas></div>
+    <button type="submit" class="btn-save">保存する</button>
+  </form>
 
-    <footer>© 2025 Study Tracker</footer>
-  </main>
+  <a href="index.html" class="btn-back">← 戻る</a>
+</div>
 
-  <script>
+<script>
+  // 日付の初期値を今日にする
+  document.getElementById('date').value = new Date().toISOString().split('T')[0];
+
+  const fileInput = document.getElementById('fileInput');
+  const status = document.getElementById('status');
+  const debugCanvas = document.getElementById('debugCanvas');
+  const problemInput = document.getElementById('problemNumber');
+
+  // --- AIスキャン機能 (Roboflow) ---
+  fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    status.textContent = "AI解析中...";
+    debugCanvas.style.display = "none";
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = async () => {
+      const base64Image = reader.result.split(',')[1];
+      try {
+        const workspace = "wHddFBv2H2OON7CZNk9ITBdMuhi2";
+        const workflow = "vyBjY4jYF4pCqjPOF3Mv";
+        const apiKey = "yRHyDV3o4x2Bymgsi3Ez";
+        
+        const response = await fetch(`https://api.roboflow.com/workflows/${workspace}/${workflow}/outputs?api_key=${apiKey}`, {
+          method: "POST",
+          body: JSON.stringify({ inputs: { "image": { "type": "base64", "value": base64Image } } })
+        });
+        const data = await response.json();
+        let predictions = [];
+        if (data.outputs && data.outputs[0]) {
+          for (let key in data.outputs[0]) {
+            if (data.outputs[0][key].predictions) { predictions = data.outputs[0][key].predictions; break; }
+          }
+        }
+        if (predictions.length > 0) {
+          status.textContent = "文字を読み取り中...";
+          const p = predictions[0];
+          const img = await createImageBitmap(file);
+          const ctx = debugCanvas.getContext('2d');
+          const cropX = p.x - (p.width / 2);
+          const cropY = p.y - (p.height / 2);
+          debugCanvas.width = p.width; debugCanvas.height = p.height;
+          ctx.drawImage(img, cropX, cropY, p.width, p.height, 0, 0, p.width, p.height);
+          debugCanvas.style.display = "block";
+          const { data: { text } } = await Tesseract.recognize(debugCanvas, 'eng');
+          const resultNum = text.replace(/[^0-9]/g, '');
+          if (resultNum) { problemInput.value = resultNum; status.textContent = "読み取り成功！"; }
+          else { status.textContent = "数字が読めませんでした"; }
+        } else { status.textContent = "番号が見つかりませんでした"; }
+      } catch (err) { status.textContent = "通信エラー"; }
+    };
+  });
+
+  // --- 保存機能 (LocalStorage) ---
+  document.getElementById('studyForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const newRecord = {
+      date: document.getElementById('date').value,
+      material: document.getElementById('material').value,
+      pages: parseInt(document.getElementById('problemNumber').value),
+      minutes: parseInt(document.getElementById('minutes').value),
+      totalPages: 100 // 進捗計算用の仮の全体数
+    };
     const records = JSON.parse(localStorage.getItem("records")) || [];
-
-    /* --- 教材ごとの進捗円グラフ --- */
-    const grid = document.getElementById("progressGrid");
-    records.forEach((r, i) => {
-      const progress = (r.pages / r.totalPages * 100).toFixed(1);
-      const remain = (100 - progress).toFixed(1);
-
-      const card = document.createElement("div");
-      card.className = "card";
-      card.innerHTML = `
-        <h3>${r.material}</h3>
-        <canvas id="progressChart${i}"></canvas>
-        <p>${progress}% 完了</p>
-      `;
-      grid.appendChild(card);
-
-      new Chart(document.getElementById(`progressChart${i}`), {
-        type: "doughnut",
-        data: {
-          labels: ["学習済", "残り"],
-          datasets: [{
-            data: [progress, remain],
-            backgroundColor: ["#34d399","#d1d5db"]
-          }]
-        },
-        options: {
-          cutout: "70%",
-          plugins: { legend: { display: false } }
-        }
-      });
-    });
-
-    /* --- 日ごとの合計時間 --- */
-    const byDate = {};
-    records.forEach(r=>{
-      byDate[r.date] = (byDate[r.date]||0) + r.minutes;
-    });
-    const dates = Object.keys(byDate);
-    const times = Object.values(byDate);
-
-    new Chart(document.getElementById("timeChart"), {
-      type:"bar",
-      data:{
-        labels:dates,
-        datasets:[{
-          label:"学習時間(分)",
-          data:times,
-          backgroundColor:"#60a5fa",
-          borderRadius: 6
-        }]
-      },
-      options:{
-        plugins:{legend:{display:false}},
-        scales:{
-          y:{beginAtZero:true}
-        }
-      }
-    });
-
-    /* --- 勉強効率 (ページ/時間) --- */
-    const efficiency = records.map(r=>(r.pages/(r.minutes/60)).toFixed(1));
-    const days = records.map(r=>r.date);
-
-    new Chart(document.getElementById("efficiencyChart"), {
-      type:"line",
-      data:{
-        labels:days,
-        datasets:[{
-          label:"効率 (ページ/時間)",
-          data:efficiency,
-          borderColor:"#f97316",
-          fill:false,
-          tension:0.3
-        }]
-      },
-      options:{
-        plugins:{legend:{display:false}},
-        scales:{y:{beginAtZero:true}}
-      }
-    });
-
-    /* --- リセットボタン動作 --- */
-    document.getElementById("resetBtn").addEventListener("click", () => {
-      const confirmDelete = confirm("本当にすべての記録を削除しますか？");
-      if (confirmDelete) {
-        localStorage.removeItem("records");
-        alert("データを削除しました！");
-        location.reload();
-      }
-    });
-  </script>
+    records.push(newRecord);
+    localStorage.setItem("records", JSON.stringify(records));
+    alert("記録しました！");
+    window.location.href = "index.html";
+  });
+</script>
 </body>
 </html>
