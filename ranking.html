@@ -2,138 +2,54 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <title>教材別ランキング</title>
+  <title>ランキング - AI勉強管理</title>
   <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500&display=swap" rel="stylesheet">
   <style>
-    body {
-      font-family: 'Zen Kaku Gothic New', sans-serif;
-      background: linear-gradient(180deg, #EAF9FF 0%, #C2EEFF 100%);
-      margin: 0;
-      padding: 0;
-      color: #333;
-    }
-    main {
-      width: 90%;
-      max-width: 700px;
-      margin: 0 auto;
-      padding: 40px 0 80px;
-    }
-    h1 {
-      text-align: center;
-      font-size: 32px;
-      margin-bottom: 24px;
-      color: #1d4ed8;
-    }
-    h2 {
-      font-size: 20px;
-      color: #1e40af;
-      margin: 40px 0 10px;
-      border-bottom: 2px solid #60a5fa;
-      padding-bottom: 4px;
-    }
-    .nav {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    .btn {
-      display: inline-block;
-      background: #3b82f6;
-      color: white;
-      padding: 10px 18px;
-      margin: 0 8px;
-      border-radius: 10px;
-      text-decoration: none;
-      font-size: 15px;
-      box-shadow: 0 4px 8px rgba(59,130,246,0.3);
-      transition: all 0.3s;
-    }
-    .btn:hover {
-      background: #2563eb;
-      transform: translateY(-3px);
-    }
-    .card {
-      background: white;
-      border-radius: 14px;
-      padding: 16px 20px;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.08);
-      margin-bottom: 16px;
-    }
-    .rank-item {
-      display: flex;
-      justify-content: space-between;
-      padding: 6px 0;
-      border-bottom: 1px solid #eee;
-      font-size: 15px;
-    }
-    .rank-item:last-child {
-      border-bottom: none;
-    }
-    .me {
-      background: #dbeafe;
-      border-radius: 6px;
-      padding: 4px 8px;
-    }
+    body { font-family: 'Zen Kaku Gothic New', sans-serif; background: linear-gradient(180deg, #EAF9FF 0%, #C2EEFF 100%); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+    .nav { margin-bottom: 20px; display: flex; gap: 10px; }
+    .btn-nav { background: #3b82f6; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: bold; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    .btn-nav.active { background: #1e40af; }
+    main { width: 100%; max-width: 500px; }
+    h1 { text-align: center; font-size: 1.8rem; color: #1d4ed8; margin-bottom: 20px; }
+    .card { background: white; border-radius: 14px; padding: 15px 20px; box-shadow: 0 3px 8px rgba(0,0,0,0.08); margin-bottom: 20px; }
+    h2 { font-size: 1.1rem; color: #1e40af; margin: 0 0 10px; border-bottom: 2px solid #60a5fa; padding-bottom: 4px; }
+    .rank-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+    .me { background: #dbeafe; border-radius: 6px; padding: 4px 8px; font-weight: bold; }
   </style>
 </head>
 <body>
+  <div class="nav">
+    <a href="index.html" class="btn-nav">📝 記録入力</a>
+    <a href="ranking.html" class="btn-nav active">🏆 ランキング</a>
+    <a href="record.html" class="btn-nav">📊 可視化</a>
+  </div>
   <main>
-    <h1>🏆 教材別ランキング</h1>
-
-    <div class="nav">
-      <a href="index.html" class="btn">📊 可視化</a>
-      <a href="record.html" class="btn">📝 記録入力</a>
-    </div>
-
+    <h1>🏆 教科別ランキング</h1>
     <div id="rankingArea"></div>
   </main>
-
   <script>
-    /* --- 仮の他人データ（例） --- */
     const others = [
-      { name: "田中", material: "英語長文問題集", progress: 0.42 },
-      { name: "山田", material: "英語長文問題集", progress: 0.39 },
-      { name: "佐藤", material: "世界史通史ノート", progress: 0.78 },
-      { name: "中村", material: "世界史通史ノート", progress: 0.52 },
-      { name: "鈴木", material: "Focus Gold", progress: 0.31 },
+      { name: "田中", subject: "数学", totalTime: 420 }, { name: "山田", subject: "数学", totalTime: 380 },
+      { name: "佐藤", subject: "英語", totalTime: 500 }, { name: "鈴木", subject: "理科", totalTime: 150 }
     ];
-
-    /* --- 自分のデータ取得 --- */
-    const records = JSON.parse(localStorage.getItem("records")) || [];
-    const myProgressData = records.map(r => ({
-      name: "自分",
-      material: r.material,
-      progress: r.totalPages ? r.pages / r.totalPages : 0
-    }));
-
-    /* --- 全データ結合 --- */
-    const allData = [...others, ...myProgressData];
-
-    /* --- 教材ごとにグループ化 --- */
+    const records = JSON.parse(localStorage.getItem("studyRecords") || "[]");
+    const myAgg = {};
+    records.forEach(r => { if(!myAgg[r.subject]) myAgg[r.subject] = 0; myAgg[r.subject] += parseInt(r.time || 0); });
+    const myData = Object.keys(myAgg).map(s => ({ name: "自分", subject: s, totalTime: myAgg[s] }));
+    const allData = [...others, ...myData];
     const grouped = {};
-    allData.forEach(item => {
-      if (!grouped[item.material]) grouped[item.material] = [];
-      grouped[item.material].push(item);
-    });
-
-    /* --- ランキング出力 --- */
+    allData.forEach(item => { if(!grouped[item.subject]) grouped[item.subject] = []; grouped[item.subject].push(item); });
     const area = document.getElementById("rankingArea");
-    Object.keys(grouped).forEach(material => {
-      const div = document.createElement("div");
-      div.className = "card";
-
-      const title = document.createElement("h2");
-      title.textContent = `📘 ${material}`;
-      div.appendChild(title);
-
-      const sorted = grouped[material].sort((a, b) => b.progress - a.progress);
+    Object.keys(grouped).forEach(sub => {
+      const div = document.createElement("div"); div.className = "card";
+      div.innerHTML = `<h2>📘 ${sub}</h2>`;
+      const sorted = grouped[sub].sort((a,b) => b.totalTime - a.totalTime);
       sorted.forEach((p, i) => {
-        const item = document.createElement("div");
-        item.className = "rank-item";
+        const item = document.createElement("div"); item.className = "rank-item";
         if (p.name === "自分") item.classList.add("me");
-        item.innerHTML = `${i + 1}位　${p.name}　｜　進捗率 ${(p.progress * 100).toFixed(1)}%`;
+        item.innerHTML = `<span>${i+1}位 ${p.name}</span><span>${p.totalTime}分</span>`;
         div.appendChild(item);
       });
-
       area.appendChild(div);
     });
   </script>
