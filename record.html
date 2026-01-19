@@ -3,52 +3,145 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>進捗 - AI勉強管理</title>
+  <title>分析 - AI勉強管理</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: sans-serif; background: #e0f2ff; display: flex; flex-direction: column; align-items: center; padding: 0; margin: 0; }
-    .nav { width: 100%; background: #fff; display: flex; justify-content: space-around; padding: 10px 0; box-shadow: 0 2px 5px rgba(0,0,0,0.1); position: sticky; top: 0; }
-    .btn-nav { color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: bold; padding: 5px 10px; }
-    .btn-nav.active { color: #1e40af; border-bottom: 2px solid #1e40af; }
-    
-    .container { width: 95%; max-width: 450px; padding: 20px; box-sizing: border-box; background: white; margin-top: 20px; border-radius: 12px; }
-    .progress-item { margin-bottom: 25px; }
-    .bar-bg { background: #eee; height: 16px; border-radius: 8px; overflow: hidden; margin-top: 8px; }
-    .bar-fill { background: #10b981; height: 100%; transition: width 0.8s; }
-    .stats { display: flex; justify-content: space-between; font-weight: bold; }
+    body { font-family: sans-serif; background: #f0f7ff; color: #333; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+    .nav { width: 100%; max-width: 500px; display: flex; justify-content: space-between; margin-bottom: 20px; }
+    .btn-nav { color: #1a73e8; text-decoration: none; font-weight: bold; font-size: 14px; }
+    .card { background: white; width: 100%; max-width: 500px; padding: 20px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 20px; box-sizing: border-box; }
+    h2 { font-size: 1.1rem; color: #1e40af; margin-top: 0; border-left: 4px solid #1a73e8; padding-left: 10px; }
+    canvas { width: 100% !important; height: auto !important; }
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+    .stat-item { background: #f8fbff; padding: 10px; border-radius: 8px; text-align: center; }
+    .stat-val { font-size: 1.2rem; font-weight: bold; color: #1a73e8; }
+    .stat-label { font-size: 0.7rem; color: #666; }
   </style>
 </head>
 <body>
 
   <nav class="nav">
-    <a href="select_subject.html" class="btn-nav">📚 教材</a>
-    <a href="record.html" class="btn-nav active">📊 進捗</a>
-    <a href="ranking.html" class="btn-nav">🏆 ランク</a>
+    <a href="select_subject.html" class="btn-nav">👈 教材選択</a>
+    <a href="index.html" class="btn-nav">📷 スキャンに戻る</a>
   </nav>
 
-  <div class="container">
-    <h2 style="text-align:center; color:#1a73e8; margin-top:0;">📊 学習進捗</h2>
-    <div id="list"></div>
+  <div class="card">
+    <h2>📊 全体の進捗率</h2>
+    <canvas id="progressChart"></canvas>
+    <div id="progressText" style="text-align:center; margin-top:10px; font-weight:bold;"></div>
+  </div>
+
+  <div class="card">
+    <h2>📅 日別の学習時間 (分)</h2>
+    <canvas id="timeChart"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>⚡️ 学習効率 (1分あたりの問題数)</h2>
+    <canvas id="efficiencyChart"></canvas>
+    <div style="font-size: 0.7rem; color: #888; margin-top: 5px;">※数値が高いほど集中して解けています</div>
+  </div>
+
+  <div class="card">
+    <h2>📈 総統計</h2>
+    <div class="stat-grid">
+      <div class="stat-item"><div class="stat-val" id="totalTime">0</div><div class="stat-label">総学習時間 (分)</div></div>
+      <div class="stat-item"><div class="stat-val" id="totalQuestions">0</div><div class="stat-label">解いた総問題数</div></div>
+    </div>
   </div>
 
 <script>
+  // データの読み込み
   const records = JSON.parse(localStorage.getItem('studyRecords') || "[]");
-  const summary = {};
-  records.forEach(r => {
-    if(!summary[r.subject]) summary[r.subject] = { solved: new Set(), total: r.totalCount };
-    r.num.split(',').forEach(n => { if(n.trim()) summary[r.subject].solved.add(n.trim()); });
-  });
 
-  const list = document.getElementById('list');
-  Object.keys(summary).forEach(subj => {
-    const s = summary[subj];
-    const percent = s.total > 0 ? Math.min(Math.round((s.solved.size / s.total) * 100), 100) : 0;
-    list.innerHTML += `
-      <div class="progress-item">
-        <div class="stats"><span>${subj}</span><span>${percent}%</span></div>
-        <div class="bar-bg"><div class="bar-fill" style="width:${percent}%"></div></div>
-        <div style="font-size:0.8rem; color:#666; margin-top:5px;">${s.solved.size} / ${s.total} 問 完了</div>
-      </div>`;
-  });
+  // 1. 進捗率の集計 (最新の教材を基準に表示)
+  function setupProgressChart() {
+    if (records.length === 0) return;
+    const latest = records[0];
+    const subjectName = latest.subject;
+    const totalGoal = latest.totalCount || 100;
+
+    // この教材で解いたユニークな問題番号の数
+    const solvedNums = new Set();
+    records.filter(r => r.subject === subjectName).forEach(r => {
+      r.num.split(',').forEach(n => { if(n) solvedNums.add(n) });
+    });
+
+    const solvedCount = solvedNums.size;
+    const remaining = Math.max(0, totalGoal - solvedCount);
+    const percent = Math.round((solvedCount / totalGoal) * 100);
+
+    document.getElementById('progressText').textContent = `${subjectName}: ${percent}% 完了`;
+
+    new Chart(document.getElementById('progressChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['完了', '未完了'],
+        datasets: [{
+          data: [solvedCount, remaining],
+          backgroundColor: ['#1a73e8', '#e0f2ff'],
+          borderWidth: 0
+        }]
+      },
+      options: { cutout: '70%' }
+    });
+  }
+
+  // 2. 日別学習時間 & 3. 効率の集計
+  function setupHistoryCharts() {
+    const dailyData = {};
+    records.forEach(r => {
+      const date = r.date;
+      const time = parseInt(r.time) || 0;
+      const count = r.num.split(',').filter(n => n !== "").length;
+
+      if (!dailyData[date]) dailyData[date] = { time: 0, count: 0 };
+      dailyData[date].time += time;
+      dailyData[date].count += count;
+    });
+
+    const labels = Object.keys(dailyData).sort();
+    const times = labels.map(l => dailyData[l].time);
+    const efficiencies = labels.map(l => dailyData[l].time > 0 ? (dailyData[l].count / dailyData[l].time).toFixed(2) : 0);
+
+    // 棒グラフ (時間)
+    new Chart(document.getElementById('timeChart'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: '学習時間',
+          data: times,
+          backgroundColor: '#3b82f6',
+          borderRadius: 5
+        }]
+      }
+    });
+
+    // 折れ線グラフ (効率)
+    new Chart(document.getElementById('efficiencyChart'), {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: '効率 (問/分)',
+          data: efficiencies,
+          borderColor: '#10b981',
+          backgroundColor: '#10b98133',
+          fill: true,
+          tension: 0.3
+        }]
+      }
+    });
+
+    // 総計
+    document.getElementById('totalTime').textContent = times.reduce((a, b) => a + b, 0);
+    document.getElementById('totalQuestions').textContent = labels.reduce((a, l) => a + dailyData[l].count, 0);
+  }
+
+  // 実行
+  setupProgressChart();
+  setupHistoryCharts();
 </script>
 </body>
 </html>
