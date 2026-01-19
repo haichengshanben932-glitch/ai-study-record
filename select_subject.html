@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>教材管理 - AI勉強管理</title>
+  <style>
+    body { font-family: sans-serif; background: #e0f2ff; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; padding-bottom: 100px; }
+    h1 { color: #1e40af; font-size: 1.5rem; margin-bottom: 20px; }
+    .container { width: 100%; max-width: 400px; }
+    
+    /* 登録フォームのスタイル */
+    .add-form { background: #fff; padding: 15px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 100%; box-sizing: border-box; }
+    .add-form input { width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+    .btn-add { background: #10b981; color: white; border: none; padding: 10px; width: 100%; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 5px; }
+
+    /* 教材リストのスタイル */
+    .subject-card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); cursor: pointer; position: relative; }
+    .subject-name { font-weight: bold; font-size: 1.1rem; color: #333; }
+    .btn-delete { position: absolute; top: 10px; right: 10px; background: #ff4d4d; color: white; border: none; border-radius: 4px; font-size: 10px; padding: 4px 8px; cursor: pointer; }
+
+    .sub-container { display: none; margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px; }
+    .sub-item { background: #f0f7ff; padding: 10px; border-radius: 8px; margin-bottom: 5px; color: #1a73e8; font-weight: bold; text-align: center; border: 1px solid #bfdbfe; }
+    
+    .active .sub-container { display: block; }
+    .hint { font-size: 0.8rem; color: #666; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+
+  <h1>📚 教材を選ぶ・登録する</h1>
+
+  <div class="add-form">
+    <div style="font-weight:bold; margin-bottom:8px; color:#1e40af;">＋ 新しい教材を登録</div>
+    <input type="text" id="mainName" placeholder="教材名 (例: Focus Gold)">
+    <input type="text" id="subName" placeholder="科目・巻 (例: 数学B) ※空欄OK">
+    <input type="number" id="totalCount" placeholder="全ページ数/問題数" inputmode="numeric">
+    <button class="btn-add" onclick="addNewSubject()">リストに追加</button>
+  </div>
+
+  <div class="hint">タップで科目を選択 ↓</div>
+  <div class="container" id="subjectList"></div>
+
+<script>
+  // 初期データ（LocalStorageが空の時だけ表示）
+  const defaultSubjects = [
+    { name: "Focus Gold 数学I+A", total: 293},
+    { name: "Focus Gold 数学ⅠⅠ", total: 245},
+    { name: "Focus Gold 数学B+C", 
+      sub: [{ name: "数学B-1", total: 66 }, 
+            { name: "数学B-2", total: 16 },
+            { name: "数学C-1", total: 81 },
+            { name: "数学C-2", total: 84 }
+           ] 
+    },
+    { name: "Focus Gold 数学ⅠⅠⅠ", total: 221},
+    { name: "4STEP数学Ⅰ+A", total: 326 },
+    { name: "4STEP数学Ⅱ", total: 514 },
+    { name: "4STEP数学B", total: 179 },
+    { name: "4STEP数学C", total: 302 },
+    { name: "4STEP数学Ⅲ", total: 342 },
+    { name: "セミナー物理基礎+物理", total: 622 },
+    { name: "良問の風物理", total: 154 },
+    { name: "エクセル化学", total: 615 }
+  ];
+
+  // 保存された教材を読み込む
+  let mySubjects = JSON.parse(localStorage.getItem('mySubjects')) || defaultSubjects;
+
+  function renderSubjects() {
+    const listContainer = document.getElementById('subjectList');
+    listContainer.innerHTML = '';
+
+    mySubjects.forEach((s, index) => {
+      const card = document.createElement('div');
+      card.className = 'subject-card';
+      
+      let html = `<button class="btn-delete" onclick="deleteSubject(${index}); event.stopPropagation();">削除</button>`;
+      
+      if (s.sub && s.sub.length > 0) {
+        html += `
+          <div class="subject-name">${s.name} ▼</div>
+          <div class="sub-container">
+            ${s.sub.map(item => `<div class="sub-item" onclick="selectSub('${s.name}（${item.name}）', ${item.total})">${item.name} (全${item.total})</div>`).join('')}
+          </div>
+        `;
+        card.onclick = function(e) {
+          if (e.target.className !== 'sub-item' && e.target.className !== 'btn-delete') {
+            this.classList.toggle('active');
+          }
+        };
+      } else {
+        html += `
+          <div class="subject-name">${s.name}</div>
+          <div style="font-size:0.8rem; color:#666;">全 ${s.total} 問/ページ</div>
+        `;
+        card.onclick = (e) => {
+            if(e.target.className !== 'btn-delete') selectSub(s.name, s.total);
+        };
+      }
+      
+      card.innerHTML = html;
+      listContainer.appendChild(card);
+    });
+  }
+
+  // 新しい教材を追加する関数
+  function addNewSubject() {
+    const main = document.getElementById('mainName').value.trim();
+    const sub = document.getElementById('subName').value.trim();
+    const total = parseInt(document.getElementById('totalCount').value) || 0;
+
+    if (!main) return alert("教材名を入力してください");
+
+    // すでに同じ大項目があるか探す
+    const existing = mySubjects.find(s => s.name === main);
+
+    if (sub) {
+      if (existing) {
+        // すでに大項目があれば、その中にsubを追加
+        if (!existing.sub) existing.sub = [];
+        existing.sub.push({ name: sub, total: total });
+      } else {
+        // 新しく階層を作る
+        mySubjects.push({ name: main, sub: [{ name: sub, total: total }] });
+      }
+    } else {
+      // subがない場合はそのまま追加
+      mySubjects.push({ name: main, total: total });
+    }
+
+    saveAndRender();
+    // 入力をクリア
+    document.getElementById('mainName').value = '';
+    document.getElementById('subName').value = '';
+    document.getElementById('totalCount').value = '';
+  }
+
+  function deleteSubject(index) {
+    if (confirm("この教材をリストから削除しますか？")) {
+      mySubjects.splice(index, 1);
+      saveAndRender();
+    }
+  }
+
+  function saveAndRender() {
+    localStorage.setItem('mySubjects', JSON.stringify(mySubjects));
+    renderSubjects();
+  }
+
+  function selectSub(name, total) {
+    location.href = `index.html?subject=${encodeURIComponent(name)}&total=${total}`;
+  }
+
+  // 初回表示
+  renderSubjects();
+</script>
+</body>
+</html>

@@ -2,51 +2,53 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>可視化 - AI勉強管理</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>進捗 - AI勉強管理</title>
   <style>
-    body { font-family: sans-serif; background: #f0f4f8; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-    .nav { margin-bottom: 20px; display: flex; gap: 10px; }
-    .btn-nav { background: #3b82f6; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: bold; }
-    .btn-nav.active { background: #1e40af; }
-    .card { background: white; width: 100%; max-width: 500px; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-    h1 { text-align: center; color: #333; font-size: 1.5rem; }
-    .bar-container { margin-top: 20px; }
-    .bar-row { margin-bottom: 15px; }
-    .bar-label { font-size: 0.9rem; font-weight: bold; margin-bottom: 5px; display: flex; justify-content: space-between; }
-    .bar-outer { background: #eee; border-radius: 10px; height: 20px; width: 100%; overflow: hidden; }
-    .bar-inner { background: #4285f4; height: 100%; width: 0; transition: width 0.8s ease-out; }
+    body { font-family: sans-serif; background: #e0f2ff; display: flex; flex-direction: column; align-items: center; padding: 0; margin: 0; }
+    .nav { width: 100%; background: #fff; display: flex; justify-content: space-around; padding: 10px 0; box-shadow: 0 2px 5px rgba(0,0,0,0.1); position: sticky; top: 0; }
+    .btn-nav { color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: bold; padding: 5px 10px; }
+    .btn-nav.active { color: #1e40af; border-bottom: 2px solid #1e40af; }
+    
+    .container { width: 95%; max-width: 450px; padding: 20px; box-sizing: border-box; background: white; margin-top: 20px; border-radius: 12px; }
+    .progress-item { margin-bottom: 25px; }
+    .bar-bg { background: #eee; height: 16px; border-radius: 8px; overflow: hidden; margin-top: 8px; }
+    .bar-fill { background: #10b981; height: 100%; transition: width 0.8s; }
+    .stats { display: flex; justify-content: space-between; font-weight: bold; }
   </style>
 </head>
 <body>
-  <div class="nav">
-    <a href="index.html" class="btn-nav">📝 記録入力</a>
-    <a href="ranking.html" class="btn-nav">🏆 ランキング</a>
-    <a href="record.html" class="btn-nav active">📊 可視化</a>
+
+  <nav class="nav">
+    <a href="select_subject.html" class="btn-nav">📚 教材</a>
+    <a href="record.html" class="btn-nav active">📊 進捗</a>
+    <a href="ranking.html" class="btn-nav">🏆 ランク</a>
+  </nav>
+
+  <div class="container">
+    <h2 style="text-align:center; color:#1a73e8; margin-top:0;">📊 学習進捗</h2>
+    <div id="list"></div>
   </div>
-  <div class="card">
-    <h1>📊 学習時間の内訳</h1>
-    <div id="chart" class="bar-container"></div>
-  </div>
-  <script>
-    const records = JSON.parse(localStorage.getItem("studyRecords") || "[]");
-    const summary = {};
-    let maxTime = 0;
-    records.forEach(r => {
-      if(!summary[r.subject]) summary[r.subject] = 0;
-      summary[r.subject] += parseInt(r.time || 0);
-      if(summary[r.subject] > maxTime) maxTime = summary[r.subject];
-    });
-    const chart = document.getElementById("chart");
-    if(Object.keys(summary).length === 0) { chart.innerHTML = "<p style='text-align:center;'>データがありません</p>"; }
-    Object.keys(summary).forEach(sub => {
-      const percent = (summary[sub] / maxTime) * 100;
-      const row = document.createElement("div"); row.className = "bar-row";
-      row.innerHTML = `
-        <div class="bar-label"><span>${sub}</span><span>${summary[sub]}分</span></div>
-        <div class="bar-outer"><div class="bar-inner" style="width: ${percent}%"></div></div>
-      `;
-      chart.appendChild(row);
-    });
-  </script>
+
+<script>
+  const records = JSON.parse(localStorage.getItem('studyRecords') || "[]");
+  const summary = {};
+  records.forEach(r => {
+    if(!summary[r.subject]) summary[r.subject] = { solved: new Set(), total: r.totalCount };
+    r.num.split(',').forEach(n => { if(n.trim()) summary[r.subject].solved.add(n.trim()); });
+  });
+
+  const list = document.getElementById('list');
+  Object.keys(summary).forEach(subj => {
+    const s = summary[subj];
+    const percent = s.total > 0 ? Math.min(Math.round((s.solved.size / s.total) * 100), 100) : 0;
+    list.innerHTML += `
+      <div class="progress-item">
+        <div class="stats"><span>${subj}</span><span>${percent}%</span></div>
+        <div class="bar-bg"><div class="bar-fill" style="width:${percent}%"></div></div>
+        <div style="font-size:0.8rem; color:#666; margin-top:5px;">${s.solved.size} / ${s.total} 問 完了</div>
+      </div>`;
+  });
+</script>
 </body>
 </html>

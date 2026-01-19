@@ -1,57 +1,33 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ランキング - AI勉強管理</title>
-  <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500&display=swap" rel="stylesheet">
   <style>
-    body { font-family: 'Zen Kaku Gothic New', sans-serif; background: linear-gradient(180deg, #EAF9FF 0%, #C2EEFF 100%); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
-    .nav { margin-bottom: 20px; display: flex; gap: 10px; }
-    .btn-nav { background: #3b82f6; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: bold; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-    .btn-nav.active { background: #1e40af; }
-    main { width: 100%; max-width: 500px; }
-    h1 { text-align: center; font-size: 1.8rem; color: #1d4ed8; margin-bottom: 20px; }
-    .card { background: white; border-radius: 14px; padding: 15px 20px; box-shadow: 0 3px 8px rgba(0,0,0,0.08); margin-bottom: 20px; }
-    h2 { font-size: 1.1rem; color: #1e40af; margin: 0 0 10px; border-bottom: 2px solid #60a5fa; padding-bottom: 4px; }
-    .rank-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
-    .me { background: #dbeafe; border-radius: 6px; padding: 4px 8px; font-weight: bold; }
+    body { font-family: sans-serif; background: #e0f2ff; display: flex; flex-direction: column; align-items: center; padding: 0; margin: 0; }
+    .nav { width: 100%; background: #fff; display: flex; justify-content: space-around; padding: 10px 0; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .btn-nav { color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: bold; padding: 5px 10px; }
+    .btn-nav.active { color: #1e40af; border-bottom: 2px solid #1e40af; }
+    .container { width: 95%; max-width: 400px; background: white; margin-top: 20px; padding: 20px; border-radius: 12px; }
+    .rank-item { display: flex; justify-content: space-between; padding: 15px; border-bottom: 1px solid #eee; }
+    .rank-num { font-weight: bold; color: #f59e0b; width: 30px; }
   </style>
 </head>
 <body>
-  <div class="nav">
-    <a href="index.html" class="btn-nav">📝 記録入力</a>
-    <a href="ranking.html" class="btn-nav active">🏆 ランキング</a>
-    <a href="record.html" class="btn-nav">📊 可視化</a>
+
+  <nav class="nav">
+    <a href="select_subject.html" class="btn-nav">📚 教材</a>
+    <a href="record.html" class="btn-nav">📊 進捗</a>
+    <a href="ranking.html" class="btn-nav active">🏆 ランク</a>
+  </nav>
+
+  <div class="container">
+    <h2 style="text-align:center; color:#1a73e8; margin-top:0;">🏆 今週のランキング</h2>
+    <div class="rank-item"><span class="rank-num">1</span><span>あなた</span><span>-- 分</span></div>
+    <div class="rank-item"><span class="rank-num">2</span><span>田中くん</span><span>120 分</span></div>
+    <div class="rank-item"><span class="rank-num">3</span><span>佐藤さん</span><span>95 分</span></div>
   </div>
-  <main>
-    <h1>🏆 教科別ランキング</h1>
-    <div id="rankingArea"></div>
-  </main>
-  <script>
-    const others = [
-      { name: "田中", subject: "数学", totalTime: 420 }, { name: "山田", subject: "数学", totalTime: 380 },
-      { name: "佐藤", subject: "英語", totalTime: 500 }, { name: "鈴木", subject: "理科", totalTime: 150 }
-    ];
-    const records = JSON.parse(localStorage.getItem("studyRecords") || "[]");
-    const myAgg = {};
-    records.forEach(r => { if(!myAgg[r.subject]) myAgg[r.subject] = 0; myAgg[r.subject] += parseInt(r.time || 0); });
-    const myData = Object.keys(myAgg).map(s => ({ name: "自分", subject: s, totalTime: myAgg[s] }));
-    const allData = [...others, ...myData];
-    const grouped = {};
-    allData.forEach(item => { if(!grouped[item.subject]) grouped[item.subject] = []; grouped[item.subject].push(item); });
-    const area = document.getElementById("rankingArea");
-    Object.keys(grouped).forEach(sub => {
-      const div = document.createElement("div"); div.className = "card";
-      div.innerHTML = `<h2>📘 ${sub}</h2>`;
-      const sorted = grouped[sub].sort((a,b) => b.totalTime - a.totalTime);
-      sorted.forEach((p, i) => {
-        const item = document.createElement("div"); item.className = "rank-item";
-        if (p.name === "自分") item.classList.add("me");
-        item.innerHTML = `<span>${i+1}位 ${p.name}</span><span>${p.totalTime}分</span>`;
-        div.appendChild(item);
-      });
-      area.appendChild(div);
-    });
-  </script>
+
 </body>
 </html>
