@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>記録 - AI勉強管理</title>
+  <title>記録 - 自作AI勉強管理</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <style>
     body { font-family: sans-serif; background: #e0f2ff; display: flex; flex-direction: column; align-items: center; padding: 0; margin: 0; }
     .nav { width: 100%; background: #fff; display: flex; justify-content: space-around; padding: 10px 0; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
@@ -31,7 +32,7 @@
     <div class="header"><div id="displaySubj" style="font-weight:bold;">📚 教材読み込み中...</div></div>
     <video id="videoElement" autoplay playsinline></video>
     <button id="captureButton">📷</button>
-    <div id="status">READY</div>
+    <div id="status">AI 起動中...</div>
     <form id="studyForm">
       <div id="detectedNumbersList">番号をスキャンしてください</div>
       <input type="number" id="studyTime" placeholder="学習時間 (分)" required inputmode="numeric">
@@ -40,26 +41,37 @@
   </div>
 
 <script>
-  // ==========================================
-  // ここに取得したAPIキーを貼り付けてください
-  const OCR_API_KEY = "K81357193988957"; 
-  // ==========================================
-
   const params = new URLSearchParams(window.location.search);
   const subj = params.get('subject') || "不明";
   const total = params.get('total') || 0;
   document.getElementById('displaySubj').textContent = "📚 " + subj;
 
   const video = document.getElementById('videoElement');
+  const statusDiv = document.getElementById('status');
   let detected = [];
+  let myModel;
 
+  // 1. 自作AIモデルの読み込み
+  async function loadModel() {
+    try {
+      myModel = await tf.loadLayersModel('./model.json');
+      statusDiv.textContent = "READY (自作AI搭載)";
+    } catch (e) {
+      statusDiv.textContent = "モデル読み込みエラー";
+      console.error(e);
+    }
+  }
+  loadModel();
+
+  // カメラ起動
   navigator.mediaDevices.getUserMedia({ 
     video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
   }).then(s => { video.srcObject = s; });
 
   document.getElementById('captureButton').onclick = async () => {
-    const statusDiv = document.getElementById('status');
-    statusDiv.textContent = "🔍 分析中...";
+    if (!myModel) return alert("AIの準備中です");
+    
+    statusDiv.textContent = "🔍 自作AIで解析中...";
     
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth; 
@@ -68,7 +80,7 @@
     ctx.drawImage(video, 0, 0);
 
     try {
-      // 1. Roboflowで枠を検出
+      // 1. Roboflowで枠を検出（枠の場所だけAPIに聞く）
       const base64 = canvas.toDataURL("image/jpeg", 0.8).split(",")[1];
       const roboflowRes = await fetch(`https://detect.roboflow.com/find-question-number/6?api_key=pfPc3Pu2ezLadUx7Dzw8`, { 
         method: "POST", body: base64, headers: { "Content-Type": "application/x-www-form-urlencoded" } 
@@ -80,51 +92,48 @@
         return;
       }
 
-      // 負荷軽減のため、確信度が高い順に最大5個までに絞る
-      const targets = data.predictions
-        .sort((a, b) => b.confidence - a.confidence)
-        .slice(0, 5);
-
-      statusDiv.textContent = `☁️ ${targets.length}箇所を解析中...`;
+      const targets = data.predictions.sort((a, b) => b.confidence - a.confidence).slice(0, 5);
 
       for (const p of targets) {
-        const padding = 10;
+        const padding = 15;
         const crop = document.createElement("canvas");
         crop.width = p.width + padding * 2;
         crop.height = p.height + padding * 2;
         const cropCtx = crop.getContext("2d");
         cropCtx.drawImage(canvas, p.x-p.width/2-padding, p.y-p.height/2-padding, p.width+padding*2, p.height+padding*2, 0, 0, crop.width, crop.height);
 
-        const cropBase64 = crop.toDataURL("image/jpeg", 0.9);
-
-        // 2. OCR.space API実行
-        const formData = new FormData();
-        formData.append("base64Image", cropBase64);
-        formData.append("language", "eng");
-        formData.append("OCREngine", "2");
-
-        const ocrRes = await fetch("https://api.ocr.space/parse/image", {
-          method: "POST",
-          headers: { "apikey": OCR_API_KEY }, 
-          body: formData
-        });
-
-        const ocrData = await ocrRes.json();
-        if (ocrData.ParsedResults && ocrData.ParsedResults[0]) {
-          const n = ocrData.ParsedResults[0].ParsedText.replace(/[^0-9]/g, '').trim();
-          if (n && n.length >= 1 && n.length <= 4 && !detected.includes(n)) {
-            detected.push(n);
-            renderTags();
-          }
+        // 2. 切り取った枠内を自作AIで判定（ここは自分のスマホ内で処理！）
+        const resultDigit = await runInference(crop);
+        
+        if (resultDigit !== null && !detected.includes(resultDigit)) {
+          detected.push(resultDigit.toString());
+          renderTags();
         }
-        // 同時リクエストによるエラーを防ぐため少し待機
-        await new Promise(resolve => setTimeout(resolve, 300));
       }
       statusDiv.textContent = "スキャン完了！";
     } catch(e) { 
-      statusDiv.textContent = "エラーが発生しました"; 
+      statusDiv.textContent = "解析エラー"; 
     }
   };
+
+  // 【核心】自作AIモデルに画像を渡して推論する関数
+  async function runInference(sourceCanvas) {
+    const tensor = tf.tidy(() => {
+      return tf.browser.fromPixels(sourceCanvas, 1) // グレースケールで読み込み
+        .resizeNearestNeighbor([28, 28])             // 学習時と同じ28x28に
+        .toFloat()
+        .div(tf.scalar(255.0))                       // 0〜1に正規化
+        .expandDims();                               // バッチサイズ(1)を追加
+    });
+
+    const prediction = await myModel.predict(tensor);
+    const scores = prediction.dataSync();
+    const result = prediction.argMax(1).dataSync()[0];
+    const confidence = Math.max(...scores);
+
+    // 確信度が低い場合は無視する（誤判定防止）
+    return confidence > 0.7 ? result : null;
+  }
 
   function renderTags() {
     const list = document.getElementById('detectedNumbersList');
