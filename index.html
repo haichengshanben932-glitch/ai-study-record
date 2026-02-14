@@ -3,75 +3,100 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>記録 - 自作AI勉強管理</title>
+  <title>AI記録 - 完全版</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <style>
-    body { font-family: sans-serif; background: #e0f2ff; display: flex; flex-direction: column; align-items: center; padding: 0; margin: 0; }
+    body { font-family: sans-serif; background: #e0f2ff; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 0; }
     .nav { width: 100%; background: #fff; display: flex; justify-content: space-around; padding: 10px 0; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
     .btn-nav { color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: bold; }
     .container { width: 95%; max-width: 450px; padding: 15px; box-sizing: border-box; }
-    .header { background: #f0f7ff; padding: 10px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #1a73e8; }
     #videoElement { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 10px; background: #000; }
-    #captureButton { background: #e81a4b; color: white; padding: 20px; border: none; border-radius: 50%; width: 70px; height: 70px; font-size: 1.5rem; margin-top: -35px; display: block; margin-left: auto; margin-right: auto; position: relative; z-index: 10; box-shadow: 0 4px 10px rgba(0,0,0,0.3); outline: none; }
-    #captureButton:active { transform: scale(0.95); background: #c2163e; }
-    input { width: 100%; padding: 15px; margin: 10px 0; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; font-size: 16px; }
-    .btn-save { background: #1a73e8; color: white; border: none; padding: 15px; width: 100%; border-radius: 8px; font-weight: bold; font-size: 1.1rem; }
-    #detectedNumbersList { background: #f8fbff; border: 1px solid #dbeafe; border-radius: 8px; padding: 10px; min-height: 50px; margin: 10px 0; display: flex; flex-wrap: wrap; gap: 8px; }
+    #captureButton { background: #e81a4b; color: white; padding: 20px; border: none; border-radius: 50%; width: 70px; height: 70px; font-size: 1.5rem; display: block; margin: -35px auto 10px auto; position: relative; z-index: 10; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    #status { text-align:center; font-size:0.9rem; margin: 10px 0; color: #1a73e8; font-weight: bold; background: white; padding: 5px; border-radius: 5px; }
+    /* スマホ用ログ出力エリア */
+    #debugLog { width: 100%; font-size: 10px; color: #333; background: #eee; padding: 5px; border-radius: 5px; max-height: 80px; overflow-y: auto; margin-top: 10px; white-space: pre-wrap; }
+    #detectedNumbersList { background: #fff; border-radius: 8px; padding: 10px; min-height: 40px; margin: 10px 0; display: flex; flex-wrap: wrap; gap: 8px; border: 1px solid #ddd; }
     .tag { background: #e0f2ff; padding: 5px 10px; border-radius: 6px; font-size: 0.9rem; font-weight: bold; color: #1e40af; border: 1px solid #bfdbfe; }
-    #status { text-align:center; font-size:0.9rem; margin: 10px 0; color: #1a73e8; font-weight: bold; min-height: 1.2rem; }
+    .btn-save { background: #1a73e8; color: white; border: none; padding: 15px; width: 100%; border-radius: 8px; font-weight: bold; font-size: 1.1rem; }
+    input { width: 100%; padding: 15px; margin: 10px 0; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
   </style>
 </head>
 <body>
 
   <nav class="nav">
-    <a href="select_subject.html" class="btn-nav">👈 教材を選び直す</a>
-    <a href="record.html" class="btn-nav">📊 進捗を見る</a>
+    <a href="select_subject.html" class="btn-nav">👈 戻る</a>
+    <a href="record.html" class="btn-nav">📊 記録</a>
   </nav>
 
   <div class="container">
-    <div class="header"><div id="displaySubj" style="font-weight:bold;">📚 教材読み込み中...</div></div>
+    <div id="status">システム起動中...</div>
     <video id="videoElement" autoplay playsinline></video>
     <button id="captureButton">📷</button>
-    <div id="status">AI 起動中...</div>
+    
+    <div id="debugLog">ログを表示中...</div>
+
     <form id="studyForm">
       <div id="detectedNumbersList">番号をスキャンしてください</div>
       <input type="number" id="studyTime" placeholder="学習時間 (分)" required inputmode="numeric">
-      <button type="submit" class="btn-save">保存して完了</button>
+      <button type="submit" class="btn-save">保存</button>
     </form>
   </div>
 
 <script>
-  const params = new URLSearchParams(window.location.search);
-  const subj = params.get('subject') || "不明";
-  const total = params.get('total') || 0;
-  document.getElementById('displaySubj').textContent = "📚 " + subj;
-
-  const video = document.getElementById('videoElement');
+  // 設定
+  const ROBOTFLOW_API_KEY = "pfPc3Pu2ezLadUx7Dzw8"; 
   const statusDiv = document.getElementById('status');
-  let detected = [];
+  const logDiv = document.getElementById('debugLog');
+  const video = document.getElementById('videoElement');
   let myModel;
+  let detected = [];
 
-  // 1. 自作AIモデルの読み込み
-  async function loadModel() {
+  // スマホ画面にログを出す関数
+  function log(msg) {
+    const t = new Date().toLocaleTimeString();
+    logDiv.textContent = `[${t}] ${msg}\n` + logDiv.textContent;
+    console.log(msg);
+  }
+
+  // 1. モデルの読み込み
+  async function init() {
     try {
+      log("TFJSモデル読み込み中...");
+      // GitHub Pagesのパス問題を回避するため相対パスを使用
       myModel = await tf.loadLayersModel('./model.json');
-      statusDiv.textContent = "READY (自作AI搭載)";
+      log("✅ モデル読み込み完了！");
+      statusDiv.textContent = "READY (自作AI)";
+      startCamera();
     } catch (e) {
+      log("❌ モデル読み込み失敗: " + e.message);
       statusDiv.textContent = "モデル読み込みエラー";
-      console.error(e);
+      // カメラだけでも起動させる
+      startCamera();
     }
   }
-  loadModel();
 
-  // カメラ起動
-  navigator.mediaDevices.getUserMedia({ 
-    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
-  }).then(s => { video.srcObject = s; });
+  // 2. カメラ起動
+  function startCamera() {
+    log("カメラ起動中...");
+    navigator.mediaDevices.getUserMedia({ 
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
+    }).then(s => {
+      video.srcObject = s;
+      log("✅ カメラ接続完了");
+    }).catch(e => {
+      log("❌ カメラエラー: " + e.message);
+    });
+  }
 
+  // 3. スキャン実行
   document.getElementById('captureButton').onclick = async () => {
-    if (!myModel) return alert("AIの準備中です");
+    if (!myModel) {
+      alert("AIモデルが読み込まれていません。ページを更新してください。");
+      return;
+    }
     
-    statusDiv.textContent = "🔍 自作AIで解析中...";
+    statusDiv.textContent = "🔍 解析中...";
+    log("スキャン開始...");
     
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth; 
@@ -80,21 +105,24 @@
     ctx.drawImage(video, 0, 0);
 
     try {
-      // 1. Roboflowで枠を検出（枠の場所だけAPIに聞く）
-      const base64 = canvas.toDataURL("image/jpeg", 0.8).split(",")[1];
-      const roboflowRes = await fetch(`https://detect.roboflow.com/find-question-number/6?api_key=pfPc3Pu2ezLadUx7Dzw8`, { 
+      // Roboflowで枠検出
+      const base64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+      log("Roboflow APIへ送信中...");
+      
+      const roboflowRes = await fetch(`https://detect.roboflow.com/find-question-number/6?api_key=${ROBOTFLOW_API_KEY}`, { 
         method: "POST", body: base64, headers: { "Content-Type": "application/x-www-form-urlencoded" } 
       });
       const data = await roboflowRes.json();
 
       if (!data.predictions || data.predictions.length === 0) {
-        statusDiv.textContent = "枠が見つかりませんでした";
+        statusDiv.textContent = "枠が見つかりません";
+        log("警告: 予測データが空です");
         return;
       }
 
-      const targets = data.predictions.sort((a, b) => b.confidence - a.confidence).slice(0, 5);
+      log(`${data.predictions.length}個の枠を検出。自作AIで分類中...`);
 
-      for (const p of targets) {
+      for (const p of data.predictions) {
         const padding = 15;
         const crop = document.createElement("canvas");
         crop.width = p.width + padding * 2;
@@ -102,37 +130,43 @@
         const cropCtx = crop.getContext("2d");
         cropCtx.drawImage(canvas, p.x-p.width/2-padding, p.y-p.height/2-padding, p.width+padding*2, p.height+padding*2, 0, 0, crop.width, crop.height);
 
-        // 2. 切り取った枠内を自作AIで判定（ここは自分のスマホ内で処理！）
-        const resultDigit = await runInference(crop);
-        
-        if (resultDigit !== null && !detected.includes(resultDigit)) {
-          detected.push(resultDigit.toString());
-          renderTags();
+        // 自作AI推論
+        const digit = await runInference(crop);
+        if (digit !== null) {
+          log(`判定結果: ${digit}`);
+          if (!detected.includes(digit.toString())) {
+            detected.push(digit.toString());
+            renderTags();
+          }
         }
       }
-      statusDiv.textContent = "スキャン完了！";
+      statusDiv.textContent = "スキャン完了";
     } catch(e) { 
-      statusDiv.textContent = "解析エラー"; 
+      log("❌ 解析失敗: " + e.message);
+      statusDiv.textContent = "エラー発生"; 
     }
   };
 
-  // 【核心】自作AIモデルに画像を渡して推論する関数
   async function runInference(sourceCanvas) {
-    const tensor = tf.tidy(() => {
-      return tf.browser.fromPixels(sourceCanvas, 1) // グレースケールで読み込み
-        .resizeNearestNeighbor([28, 28])             // 学習時と同じ28x28に
-        .toFloat()
-        .div(tf.scalar(255.0))                       // 0〜1に正規化
-        .expandDims();                               // バッチサイズ(1)を追加
-    });
+    try {
+      const tensor = tf.tidy(() => {
+        return tf.browser.fromPixels(sourceCanvas, 1)
+          .resizeNearestNeighbor([28, 28])
+          .toFloat()
+          .div(tf.scalar(255.0))
+          .expandDims();
+      });
 
-    const prediction = await myModel.predict(tensor);
-    const scores = prediction.dataSync();
-    const result = prediction.argMax(1).dataSync()[0];
-    const confidence = Math.max(...scores);
-
-    // 確信度が低い場合は無視する（誤判定防止）
-    return confidence > 0.7 ? result : null;
+      const prediction = await myModel.predict(tensor);
+      const scores = prediction.dataSync();
+      const result = prediction.argMax(1).dataSync()[0];
+      const confidence = Math.max(...scores);
+      
+      return confidence > 0.6 ? result : null;
+    } catch (e) {
+      log("推論エラー: " + e.message);
+      return null;
+    }
   }
 
   function renderTags() {
@@ -140,15 +174,9 @@
     list.innerHTML = detected.map(n => `<div class="tag">No.${n}</div>`).join('');
   }
 
-  document.getElementById('studyForm').onsubmit = (e) => {
-    e.preventDefault();
-    if (detected.length === 0) return alert("番号をスキャンしてください");
-    const record = { subject: subj, totalCount: parseInt(total), num: detected.join(','), time: document.getElementById('studyTime').value, date: new Date().toISOString().split('T')[0], id: Date.now() };
-    const history = JSON.parse(localStorage.getItem('studyRecords') || "[]");
-    history.unshift(record);
-    localStorage.setItem('studyRecords', JSON.stringify(history));
-    location.href = "record.html";
-  };
+  // 初期化実行
+  init();
+
 </script>
 </body>
 </html>
