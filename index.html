@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>記録 - AI勉強管理</title>
+  <title>記録 - AI勉強管理 (OCR.space版)</title>
   <style>
     body { font-family: sans-serif; background: #e0f2ff; display: flex; flex-direction: column; align-items: center; padding: 0; margin: 0; }
     .nav { width: 100%; background: #fff; display: flex; justify-content: space-around; padding: 10px 0; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
@@ -13,11 +13,11 @@
     #videoElement { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 10px; background: #000; }
     #captureButton { background: #e81a4b; color: white; padding: 20px; border: none; border-radius: 50%; width: 70px; height: 70px; font-size: 1.5rem; margin-top: -35px; display: block; margin-left: auto; margin-right: auto; position: relative; z-index: 10; box-shadow: 0 4px 10px rgba(0,0,0,0.3); outline: none; }
     #captureButton:active { transform: scale(0.95); background: #c2163e; }
-    input { width: 100%; padding: 15px; margin: 10px 0; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; font-size: 16px; }
-    .btn-save { background: #1a73e8; color: white; border: none; padding: 15px; width: 100%; border-radius: 8px; font-weight: bold; font-size: 1.1rem; }
+    #status { text-align:center; font-size:0.9rem; margin: 15px 0 5px 0; color: #1a73e8; font-weight: bold; min-height: 1.2rem; }
     #detectedNumbersList { background: #f8fbff; border: 1px solid #dbeafe; border-radius: 8px; padding: 10px; min-height: 50px; margin: 10px 0; display: flex; flex-wrap: wrap; gap: 8px; }
     .tag { background: #e0f2ff; padding: 5px 10px; border-radius: 6px; font-size: 0.9rem; font-weight: bold; color: #1e40af; border: 1px solid #bfdbfe; }
-    #status { text-align:center; font-size:0.9rem; margin: 10px 0; color: #1a73e8; font-weight: bold; min-height: 1.2rem; }
+    input { width: 100%; padding: 15px; margin: 10px 0; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; font-size: 16px; }
+    .btn-save { background: #1a73e8; color: white; border: none; padding: 15px; width: 100%; border-radius: 8px; font-weight: bold; font-size: 1.1rem; }
   </style>
 </head>
 <body>
@@ -31,7 +31,9 @@
     <div class="header"><div id="displaySubj" style="font-weight:bold;">📚 教材読み込み中...</div></div>
     <video id="videoElement" autoplay playsinline></video>
     <button id="captureButton">📷</button>
+    
     <div id="status">READY</div>
+
     <form id="studyForm">
       <div id="detectedNumbersList">番号をスキャンしてください</div>
       <input type="number" id="studyTime" placeholder="学習時間 (分)" required inputmode="numeric">
@@ -40,10 +42,10 @@
   </div>
 
 <script>
-  // ==========================================
-  // ここに取得したAPIキーを貼り付けてください
-  const OCR_API_KEY = "ここに取得したキーを貼り付け"; 
-  // ==========================================
+  // --- 設定エリア ---
+  const OCR_API_KEY = "K81357193988957"; 
+  const ROBOFLOW_API_KEY = "pfPc3Pu2ezLadUx7Dzw8";
+  // ----------------
 
   const params = new URLSearchParams(window.location.search);
   const subj = params.get('subject') || "不明";
@@ -51,15 +53,16 @@
   document.getElementById('displaySubj').textContent = "📚 " + subj;
 
   const video = document.getElementById('videoElement');
+  const statusDiv = document.getElementById('status');
   let detected = [];
 
+  // カメラ起動
   navigator.mediaDevices.getUserMedia({ 
     video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
   }).then(s => { video.srcObject = s; });
 
   document.getElementById('captureButton').onclick = async () => {
-    const statusDiv = document.getElementById('status');
-    statusDiv.textContent = "🔍 分析中...";
+    statusDiv.textContent = "🔍 枠を検出中...";
     
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth; 
@@ -68,9 +71,9 @@
     ctx.drawImage(video, 0, 0);
 
     try {
-      // 1. Roboflowで枠を検出
+      // 1. Roboflowで「番号の枠」を探す
       const base64 = canvas.toDataURL("image/jpeg", 0.8).split(",")[1];
-      const roboflowRes = await fetch(`https://detect.roboflow.com/find-question-number/6?api_key=pfPc3Pu2ezLadUx7Dzw8`, { 
+      const roboflowRes = await fetch(`https://detect.roboflow.com/find-question-number/6?api_key=${ROBOFLOW_API_KEY}`, { 
         method: "POST", body: base64, headers: { "Content-Type": "application/x-www-form-urlencoded" } 
       });
       const data = await roboflowRes.json();
@@ -80,28 +83,32 @@
         return;
       }
 
-      // 負荷軽減のため、確信度が高い順に最大5個までに絞る
-      const targets = data.predictions
-        .sort((a, b) => b.confidence - a.confidence)
-        .slice(0, 5);
-
-      statusDiv.textContent = `☁️ ${targets.length}箇所を解析中...`;
+      // 確信度が高い順に最大5個スキャン
+      const targets = data.predictions.sort((a, b) => b.confidence - a.confidence).slice(0, 5);
+      statusDiv.textContent = `☁️ ${targets.length}箇所をOCR解析中...`;
 
       for (const p of targets) {
-        const padding = 10;
+        const padding = 12; // 少し広めに切り抜く
         const crop = document.createElement("canvas");
         crop.width = p.width + padding * 2;
         crop.height = p.height + padding * 2;
         const cropCtx = crop.getContext("2d");
-        cropCtx.drawImage(canvas, p.x-p.width/2-padding, p.y-p.height/2-padding, p.width+padding*2, p.height+padding*2, 0, 0, crop.width, crop.height);
+        
+        // 切り抜き実行
+        cropCtx.drawImage(
+          canvas, 
+          p.x - p.width/2 - padding, p.y - p.height/2 - padding, 
+          p.width + padding * 2, p.height + padding * 2, 
+          0, 0, crop.width, crop.height
+        );
 
         const cropBase64 = crop.toDataURL("image/jpeg", 0.9);
 
-        // 2. OCR.space API実行
+        // 2. OCR.space APIで文字を読み取る
         const formData = new FormData();
         formData.append("base64Image", cropBase64);
         formData.append("language", "eng");
-        formData.append("OCREngine", "2");
+        formData.append("OCREngine", "2"); // Engine 2は数字に強い
 
         const ocrRes = await fetch("https://api.ocr.space/parse/image", {
           method: "POST",
@@ -110,34 +117,54 @@
         });
 
         const ocrData = await ocrRes.json();
+        
         if (ocrData.ParsedResults && ocrData.ParsedResults[0]) {
-          const n = ocrData.ParsedResults[0].ParsedText.replace(/[^0-9]/g, '').trim();
-          if (n && n.length >= 1 && n.length <= 4 && !detected.includes(n)) {
-            detected.push(n);
+          const text = ocrData.ParsedResults[0].ParsedText;
+          // 数字以外のゴミ（No. や 記号）を除去して抽出
+          const numOnly = text.replace(/[^0-9]/g, '').trim();
+          
+          if (numOnly && !detected.includes(numOnly)) {
+            detected.push(numOnly);
             renderTags();
           }
         }
-        // 同時リクエストによるエラーを防ぐため少し待機
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // 連続リクエストによる負荷を避けるため少し待機
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
       statusDiv.textContent = "スキャン完了！";
     } catch(e) { 
-      statusDiv.textContent = "エラーが発生しました"; 
+      statusDiv.textContent = "通信エラーが発生しました"; 
+      console.error(e);
     }
   };
 
   function renderTags() {
     const list = document.getElementById('detectedNumbersList');
+    if (detected.length === 0) {
+        list.textContent = "番号をスキャンしてください";
+        return;
+    }
     list.innerHTML = detected.map(n => `<div class="tag">No.${n}</div>`).join('');
   }
 
   document.getElementById('studyForm').onsubmit = (e) => {
     e.preventDefault();
     if (detected.length === 0) return alert("番号をスキャンしてください");
-    const record = { subject: subj, totalCount: parseInt(total), num: detected.join(','), time: document.getElementById('studyTime').value, date: new Date().toISOString().split('T')[0], id: Date.now() };
+    
+    const record = { 
+      subject: subj, 
+      totalCount: parseInt(total), 
+      num: detected.sort((a,b) => a-b).join(','), // 数字順に並び替えて保存
+      time: document.getElementById('studyTime').value, 
+      date: new Date().toISOString().split('T')[0], 
+      id: Date.now() 
+    };
+    
     const history = JSON.parse(localStorage.getItem('studyRecords') || "[]");
     history.unshift(record);
     localStorage.setItem('studyRecords', JSON.stringify(history));
+    
+    alert("保存しました！");
     location.href = "record.html";
   };
 </script>
